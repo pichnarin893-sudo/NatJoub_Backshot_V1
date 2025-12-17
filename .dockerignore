@@ -98,3 +98,4 @@ seeders/20251012075505-admin-user.js
 *.pid
 *.seed
 *.pid.lock
+package-lock.json
