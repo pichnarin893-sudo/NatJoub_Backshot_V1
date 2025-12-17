@@ -86,9 +86,6 @@ desktop.ini
 *.sqlite3
 *.db
 
-# Database connection test (in .gitignore)
-config/db.test.connection.js
-
 # Seeder account file (in .gitignore)
 seeders/20251012075505-admin-user.js
 

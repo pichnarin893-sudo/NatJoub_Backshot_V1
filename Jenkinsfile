@@ -83,9 +83,6 @@ pipeline {
         // Keep the last 10 builds
         buildDiscarder(logRotator(numToKeepStr: '10'))
 
-        // Colored output in console
-        ansiColor('xterm')
-
         // Timestamp console output
         timestamps()
     }
