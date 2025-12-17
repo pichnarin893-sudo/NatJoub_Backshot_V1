@@ -141,8 +141,11 @@ pipeline {
                     echo '🔨 Installing dependencies'
                     echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
 
-                    // Use npm ci for clean, reproducible installs
-                    sh 'npm ci --only=production'
+                    // Clean npm cache and use npm install as fallback for npm ci issues
+                    sh '''
+                        npm cache clean --force
+                        npm install --only=production
+                    '''
 
                     echo '✓ Dependencies installed successfully'
                 }
