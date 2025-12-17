@@ -1,0 +1,38 @@
+# dependencies
+node_modules/
+
+# build outputs
+/dist/
+/build/
+
+# env vars
+.env
+.env.*
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# optional: ignore npm lock if you really don't want to commit it
+# package-lock.json
+# git ignore
+# ca-certificate.crt
+
+# db-test-connection file that causes error on multiple computers
+config/db.test.connection.js
+
+# for safely change seeder gmail account
+20251012075505-admin-user.js
+
+CLAUDE.md

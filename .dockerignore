@@ -1,0 +1,103 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files (will be injected at runtime)
+.env
+.env.*
+*.env
+
+# Git and version control
+.git/
+.gitignore
+.gitattributes
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*.sublime-project
+*.sublime-workspace
+.project
+.settings/
+*.code-workspace
+
+# Documentation
+docs/
+README.md
+CLAUDE.md
+*.md
+!package.md
+
+# Test files
+test/
+coverage/
+*.test.js
+*.spec.js
+jest.config.js
+.nyc_output/
+
+# CI/CD files
+Jenkinsfile
+.github/
+.gitlab-ci.yml
+.travis.yml
+circle.yml
+.circleci/
+azure-pipelines.yml
+
+# Docker files
+Dockerfile.dev
+docker-compose.yml
+docker-compose.*.yml
+.dockerignore
+
+# Build outputs
+dist/
+build/
+.cache/
+tmp/
+temp/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
+
+# Database connection test (in .gitignore)
+config/db.test.connection.js
+
+# Seeder account file (in .gitignore)
+seeders/20251012075505-admin-user.js
+
+# Misc
+*.bak
+*.tmp
+*.swp
+*~
+.sass-cache/
+*.pid
+*.seed
+*.pid.lock
