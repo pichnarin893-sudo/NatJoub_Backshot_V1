@@ -4,7 +4,7 @@
 // Helper function to determine deployment environment based on branch name
 def determineEnvironment(branchName) {
     switch(branchName) {
-        case 'master':
+        case 'main':
             return 'production'
         case 'staging':
             return 'staging'
