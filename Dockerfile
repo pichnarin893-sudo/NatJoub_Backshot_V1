@@ -1,9 +1,4 @@
-# Multi-stage production Dockerfile for NatJoub Backend
-# This Dockerfile creates an optimized production image (~150-200MB) using Alpine Linux
-
-# ============================================
 # Stage 1: Builder
-# ============================================
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -17,9 +12,7 @@ RUN npm ci
 # Copy application source code
 COPY . .
 
-# ============================================
 # Stage 2: Production
-# ============================================
 FROM node:20-alpine AS production
 
 # Install dumb-init and postgresql-client for proper signal handling and database operations
