@@ -9,7 +9,11 @@
     "db:migrate": "sequelize db:migrate",
     "db:migrate:undo": "sequelize db:migrate:undo:all",
     "db:seed": "sequelize db:seed:all",
-    "db:seed:undo": "sequelize db:seed:undo:all"
+    "db:seed:undo": "sequelize db:seed:undo:all",
+    "db:migrate:railway": "NODE_ENV=production sequelize db:migrate",
+    "db:migrate:undo:railway": "NODE_ENV=production sequelize db:migrate:undo:all",
+    "db:seed:railway": "NODE_ENV=production sequelize db:seed:all",
+    "db:seed:undo:railway": "NODE_ENV=production sequelize db:seed:undo:all"
   },
   "private": true,
   "keywords": [
