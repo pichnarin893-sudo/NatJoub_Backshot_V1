@@ -86,9 +86,6 @@ desktop.ini
 *.sqlite3
 *.db
 
-# Seeder account file (in .gitignore)
-seeders/20251012075505-admin-user.js
-
 # Misc
 *.bak
 *.tmp
@@ -98,4 +95,3 @@ seeders/20251012075505-admin-user.js
 *.pid
 *.seed
 *.pid.lock
-package-lock.json

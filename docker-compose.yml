@@ -4,39 +4,47 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
+      target: production
     env_file:
       - .env
     environment:
-      # force DB_HOST to the db service in compose
+      # Override DB connection to use the db service
       - DB_HOST=db
       - DB_PORT=5432
-      - MIGRATE=true
-    volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
+      - NODE_ENV=production
     ports:
       - "3000:3000"
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - natjoub-network
 
   db:
-    image: postgres:15
+    image: postgres:15-alpine
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
       POSTGRES_DB: ${DB_NAME}
     ports:
-      - "5435:5432"
+      - "5434:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - natjoub-network
 
 volumes:
-  db_data:
+  postgres_data:
+    driver: local
+
+networks:
+  natjoub-network:
+    driver: bridge
