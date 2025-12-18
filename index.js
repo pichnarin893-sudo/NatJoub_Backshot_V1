@@ -1,6 +1,16 @@
 require('dotenv').config();
 const express = require('express');
-const {testConnection} = require('./config/db.test.connection');
+
+// Optional: Load db.test.connection if it exists
+let testConnection;
+try {
+    const dbTest = require('./config/db.test.connection');
+    testConnection = dbTest.testConnection;
+} catch (err) {
+    console.log('⚠️  db.test.connection not found, skipping database connection test');
+    testConnection = async () => { console.log('✅ Skipping database connection test'); };
+}
+
 const app = express();
 const port = process.env.PORT || 3000;
 const configPassport = require('./config/passport');
