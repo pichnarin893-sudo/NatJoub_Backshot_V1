@@ -109,15 +109,13 @@ class PaymentUtil {
                 return {
                     success: true,
                     data: {
-                        paymentId: payment.id,
-                        transactionId: payment.transaction_id,
-                        qrImage: payment.qr_image,
-                        qrString: payment.qr_string,
-                        abapayDeeplink: payment.abapay_deeplink,
+                        id: payment.id,
+                        transaction_id: payment.transaction_id,
+                        qr_image: payment.qr_image,
+                        qr_string: payment.qr_string,
                         amount: payment.amount,
                         currency: payment.currency,
-                        appStore: paymentResponse.data.data.app_store,
-                        playStore: paymentResponse.data.data.play_store
+                        paid_at: payment.paid_at
                     }
                 };
             }

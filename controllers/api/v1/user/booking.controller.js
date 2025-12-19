@@ -1,6 +1,6 @@
 const { bookings, rooms, branches, users, promotions, payments, sequelize, room_promotions, branch_promotions, user_promo_code_track, user_cancellation_stats  } = require('../../../../models');
 const { Op } = require('sequelize');
-const moment = require('moment');
+const moment = require('moment-timezone');
 const refundUtil = require('../../../../utils/refund.util');
 const paymentUtil = require('../../../../utils/payment.util');
 
@@ -24,18 +24,26 @@ class BookingController {
                 throw new Error('Missing required fields');
             }
 
-            // ✅ FIXED: Parse times correctly
-            // If time string has 'Z' suffix, it's already UTC - use as-is
-            // If time string has no timezone, JavaScript treats it as LOCAL time
+            // ✅ Parse input times as Cambodia timezone explicitly
+            // Input format: "2025-12-19 6:30:00" or "2025-12-19T14:00:00.000Z"
+            // Strip timezone info and treat as Cambodia local time
             const cambodiaTimezone = 'Asia/Phnom_Penh';
-            const start = new Date(startTime);
-            const end = new Date(endTime);
 
-            // console.log('[BookingController] 🕐 Received times:');
-            // console.log('  Input start:', startTime);
-            // console.log('  Input end:', endTime);
-            // console.log('  Start (Cambodia):', start.toLocaleString('en-US', {timeZone: cambodiaTimezone}));
-            // console.log('  End (Cambodia):', end.toLocaleString('en-US', {timeZone: cambodiaTimezone}));
+            // Remove timezone indicators (Z, +XX:XX, -XX:XX) to force local interpretation
+            const cleanStartTime = startTime.replace(/Z|([+-]\d{2}:\d{2})$/, '');
+            const cleanEndTime = endTime.replace(/Z|([+-]\d{2}:\d{2})$/, '');
+
+            // Parse as Cambodia local time
+            const start = moment.tz(cleanStartTime, cambodiaTimezone).toDate();
+            const end = moment.tz(cleanEndTime, cambodiaTimezone).toDate();
+
+            console.log('[BookingController] 🕐 Received times:');
+            console.log('  Input start:', startTime);
+            console.log('  Input end:', endTime);
+            console.log('  Parsed start (UTC):', start.toISOString());
+            console.log('  Parsed end (UTC):', end.toISOString());
+            console.log('  Start (Cambodia display):', start.toLocaleString('en-US', {timeZone: cambodiaTimezone}));
+            console.log('  End (Cambodia display):', end.toLocaleString('en-US', {timeZone: cambodiaTimezone}));
 
             if (start >= end) {
                 throw new Error('Start time must be before end time');
@@ -180,21 +188,22 @@ class BookingController {
              * End of promotion logic
              */
 
-            const booking = await bookings.create({
-                customer_id: userId,
-                room_id: roomId,                
-                start_time: start.toISOString(),
-                end_time: end.toISOString(),
-                total_price: totalPrice.toFixed(3), // format as string with 3 decimals
-                promotion_id: appliedPromotionId,
-                status: 'pending'
-            }, { transaction });
+          
+const booking = await bookings.create({
+    customer_id: userId,
+    room_id: roomId,
+    start_time: new Date(start), // Parse ISO string as UTC Date object
+    end_time: new Date(end),     // Parse ISO string as UTC Date object
+    total_price: totalPrice.toFixed(3),
+    promotion_id: appliedPromotionId,
+    status: 'pending'
+}, { transaction });
 
-            console.log('Promotion ID: ', appliedPromotionId);
-            console.log('[BookingController] ✅ Booking created:');
-            console.log('  ID:', booking.id);
-            console.log('  Start stored (UTC):', booking.start_time);
-            console.log('  End stored (UTC):', booking.end_time);
+console.log('[BookingController] ✅ Booking created:');
+console.log('  ID:', booking.id);
+console.log('  Start stored (UTC):', booking.start_time.toISOString());
+console.log('  End stored (UTC):', booking.end_time.toISOString());
+
 
             await transaction.commit();
             return await this.getBookingById(booking.id);
@@ -504,6 +513,88 @@ class BookingController {
         }
     }
 
+    async cancelBooking(bookingId, userId, userRole = 'customer') {
+        const transaction = await sequelize.transaction();
+        try {
+            // Fetch booking with related data
+            const booking = await bookings.findByPk(bookingId, {
+                include: [
+                    {
+                        model: payments,
+                        as: 'payment'
+                    },
+                    {
+                        model: promotions,
+                        as: 'promotion'
+                    },
+                    {
+                        model: rooms,
+                        as: 'room',
+                        include: [{
+                            model: branches,
+                            as: 'branch',
+                            attributes: ['id', 'owner_id']
+                        }]
+                    }
+                ],
+                transaction
+            });
+
+            if (!booking) throw new Error('Booking not found');
+
+            // Authorization check
+            const isOwner = booking.room?.branch?.owner_id === userId;
+            const isCustomer = booking.customer_id === userId;
+            const isAdmin = userRole === 'admin';
+
+            if (!isOwner && !isCustomer && !isAdmin) {
+                throw new Error('Unauthorized: You cannot cancel this booking');
+            }
+
+            // Check if booking can be cancelled
+            if (booking.status === 'cancelled' || booking.status === 'expired') {
+                throw new Error('Booking is already cancelled');
+            }
+
+            if (booking.status === 'completed') {
+                throw new Error('Cannot cancel a completed booking');
+            }
+
+            // For pending bookings, allow direct cancellation (no refund needed)
+            if (booking.status === 'pending') {
+                await booking.update({
+                    status: 'cancelled',
+                    cancelled_at: new Date(),
+                    cancelled_by: userId,
+                    cancellation_reason: 'Cancelled by user'
+                }, { transaction });
+
+                // Restore promo code usage if applicable
+                if (booking.promotion_id && booking.promotion && booking.promotion.promo_code) {
+                    await user_promo_code_track.destroy({
+                        where: {
+                            user_id: booking.customer_id,
+                            promotion_id: booking.promotion_id
+                        },
+                        transaction
+                    });
+
+                    console.log(`Restored promo code usage for promotion ${booking.promotion_id}`);
+                }
+
+                await transaction.commit();
+                return await this.getBookingById(bookingId);
+            }
+
+            // For confirmed bookings, use the request cancellation workflow
+            throw new Error('Use the cancellation request workflow for confirmed bookings');
+
+        } catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
+    }
+
     async _updateCancellationStats(userId, transaction = null) {
         try {
             // Get or create user cancellation stats
@@ -581,6 +672,19 @@ class BookingController {
                     model: promotions,
                     as: 'promotion',
                     attributes: ['id', 'title', 'discount_percent']
+                },
+                {
+                    model: payments,
+                    as: 'payment',
+                    attributes: [
+                        'id',
+                        'transaction_id',
+                        'amount',
+                        'currency',
+                        'qr_image',
+                        'paid_at',
+                        'createdAt'
+                    ]
                 }
             ],
             order: [['start_time', 'DESC']],
@@ -716,7 +820,9 @@ class BookingController {
         const overlappingBookings = await bookings.findAll({
             where: {
                 room_id: roomId,
-                status: { [Op.notIn]: ['cancelled'] },
+                // Only consider bookings that actually occupy the room
+                // Exclude: cancelled, expired (payment timeout), failed (payment failed)
+                status: { [Op.notIn]: ['cancelled', 'expired', 'failed'] },
                 [Op.or]: [
                     { start_time: { [Op.lte]: startTime }, end_time: { [Op.gt]: startTime } },
                     { start_time: { [Op.lt]: endTime }, end_time: { [Op.gte]: endTime } },
@@ -739,21 +845,27 @@ class BookingController {
         const now = Date.now();
         let hasValidOverlap = false;
 
+        // Lazy expiration: catch any pending bookings that should be expired
+        // but haven't been processed by the cron job yet
         for (const b of overlappingBookings) {
             const createdMs = new Date(b.createdAt).getTime();
-            const expired = (now - createdMs) > FIVE_MINUTES;
+            const isExpired = (now - createdMs) > FIVE_MINUTES;
 
-            // Booking is pending AND expired
-            if (b.status === "pending" && expired) {
-                // Cancel booking
-                b.status = "cancelled";
+            // Booking is pending AND expired (payment window passed)
+            if (b.status === "pending" && isExpired) {
+                // Mark as expired (consistent with cron job behavior)
+                b.status = "expired";
+                b.cancelled_at = new Date();
+                b.cancellation_reason = 'Auto-cancelled: Payment not received within 5 minutes of booking creation';
                 await b.save({ transaction });
 
-                // Fail payment if exists
+                // Mark payment as expired if exists
                 if (b.payment && b.payment.payment_status === "pending") {
-                    b.payment.payment_status = "expired"; // ✅ correct column
+                    b.payment.payment_status = "expired";
                     await b.payment.save({ transaction });
                 }
+
+                console.log(`[Lazy Expiration] Expired booking ${b.id} during overlap check`);
 
                 // Skip — expired booking should not block room
                 continue;

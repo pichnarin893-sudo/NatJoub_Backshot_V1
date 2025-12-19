@@ -110,7 +110,8 @@ async function getFavoriteRooms(req, res) {
 async function getRoomsByBranch(req, res){
     try{
         const { branchId } = req.query;
-        const rooms = await roomController.getRoomsByBranch(branchId);
+        const user_id = req.user.id;
+        const rooms = await roomController.getRoomsByBranch(branchId, user_id);
         return successResponse(res, rooms, 'Rooms by branch retrieved successfully');
     }catch (error){
         console.error('Error in getRoomsByBranch:', error);

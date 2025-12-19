@@ -20,6 +20,8 @@ const adminRoutes = require('./routes/admin/admin.routes');
 const { initializeSocket } = require('./config/socket');
 const http = require("node:http");
 const {testCloudinaryConnection} = require("./config/cloudinary");
+const cron = require('node-cron');
+const { cancelExpiredPendingBookings } = require('./utils/booking.cleanup');
 
 // CORS configuration for frontend on port 5000
 const corsOptions = {
@@ -67,6 +69,7 @@ app.use("/api/v1/user", userRoutes);
 app.use("/api/v1/admin", adminRoutes);
 
 let server;
+let io; // Store Socket.IO instance for cron jobs
 
 const startServer = async () => {
     try {
@@ -75,7 +78,7 @@ const startServer = async () => {
 
         // create server once and attach Socket.IO to it
         server = http.createServer(app);
-        const io = initializeSocket(server);
+        io = initializeSocket(server);
         app.set('io', io);
 
         // listen on the same server instance (do NOT call app.listen)
@@ -83,6 +86,46 @@ const startServer = async () => {
             console.log(`Server running at: http://localhost:${port}`);
             console.log('📡 Socket.IO ready!');
         });
+
+        // Start cron job for auto-canceling expired pending bookings
+        // Runs every minute to check for bookings that are 5+ minutes past creation time
+        // Business rule: Users have 5 minutes from booking creation to complete payment
+        cron.schedule('* * * * *', async () => {
+            try {
+                const result = await cancelExpiredPendingBookings();
+
+                if (result.cancelled > 0) {
+                    console.log(`🧹 [Cleanup] Cancelled ${result.cancelled} expired booking(s)`);
+
+                    // Emit Socket.IO events for each cancelled booking
+                    result.details.forEach(detail => {
+                        // Notify the customer
+                        io.to(`user:${detail.customerId}`).emit('booking:expired', {
+                            success: false,
+                            message: 'Your booking was automatically cancelled due to non-payment',
+                            data: {
+                                bookingId: detail.bookingId,
+                                roomId: detail.roomId,
+                                reason: 'Payment not received within 5 minutes of booking creation'
+                            },
+                            timestamp: new Date().toISOString()
+                        });
+
+                        // Notify room channel (for availability updates)
+                        io.to(`room:${detail.roomId}`).emit('booking:cancelled', {
+                            bookingId: detail.bookingId,
+                            roomId: detail.roomId,
+                            status: 'expired',
+                            reason: 'auto-cancelled'
+                        });
+                    });
+                }
+            } catch (error) {
+                console.error('❌ [Cleanup] Cron job error:', error);
+            }
+        });
+
+        console.log('⏰ Booking cleanup cron job started (runs every minute)');
 
         process.on('SIGTERM', shutdown);
         process.on('SIGINT', shutdown);

@@ -1,6 +1,5 @@
 const {rooms, branches, favorite_rooms, sequelize, photos} = require('../../../../models');
 const {Op} = require("sequelize");
-const {getOccupiedRoomBookingTimes} = require("../../../../services/user/booking.service");
 
 async function getAllRooms(userId){
     try {
@@ -184,15 +183,14 @@ async function removeFavoriteRoom(userId, roomId) {
 }
 
 
-async function getRoomsByBranch(branchId){
-    try{
-        //only fetch the branch that have rooms include the branch that are approved
-        if(!branchId){
+async function getRoomsByBranch(branchId, userId) {
+    try {
+        if (!branchId) {
             throw new Error('branchId is required');
         }
 
-        return await rooms.findAll({
-            where:{
+        const roomsData = await rooms.findAll({
+            where: {
                 branch_id: branchId
             },
             attributes: [
@@ -201,12 +199,32 @@ async function getRoomsByBranch(branchId){
                 'people_capacity',
                 'price_per_hour',
                 'equipments',
+                'is_available',
             ]
-        })
-    }catch (error){
+        });
+
+        const favoriteRooms = await favorite_rooms.findAll({
+            where: { user_id: userId },
+            attributes: ['room_id']
+        });
+
+        const favoriteRoomIds = favoriteRooms.map(fav => fav.room_id);
+
+        return roomsData.map(room => ({
+            id: room.id,
+            room_no: room.room_no,
+            people_capacity: room.people_capacity,
+            price_per_hour: room.price_per_hour,
+            equipments: room.equipments,
+            is_available: room.is_available,
+            is_favorite: favoriteRoomIds.includes(room.id)
+        }));
+    } catch (error) {
+        console.error('Error in getRoomsByBranch:', error);
         throw error;
     }
 }
+
 
 async function getRoomDetails(roomId){
     try{

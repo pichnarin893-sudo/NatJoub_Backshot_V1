@@ -1,28 +1,25 @@
 const express = require('express');
-const authService = require('../../services/user/auth.service');
-const smsAuthService = require('../../services/user/sms.auth.service');
-const filteringService = require('../../services/user/filtering.service');
 const configPassport = require('../../config/passport');
-
 const router = express.Router();
 const privateRouter = express.Router();
 const ownerRouter = express.Router();
 const customerRouter = express.Router();
-
 const {authLimiter, otpLimiter, requestBranchLimiter} = require('../../middlewares/rateLimiter.middleware');
 const {validateLogin, validateOTP,validateFilterParams, validateTokenRefresh, validateRoomFilterParams, validateBookingCancellation} = require('../../middlewares/validation.middleware');
 const UserRegistration = require('../../services/user/user.service');
+const authService = require('../../services/user/auth.service');
+const smsAuthService = require('../../services/user/sms.auth.service');
+const filteringService = require('../../services/user/filtering.service');
 const branchService = require('../../services/user/branch.service');
-const {deleteBranch, updateBranch} = require('../../services/admin/branch.service');
 const bookingService = require('../../services/user/booking.service');
 const userService = require('../../services/user/user.service');
 const roomService = require('../../services/user/room.service');
-const {createRoom, deleteRoom, updateRoom} = require('../../services/admin/room.service');
 const ownerRoomService = require('../../services/user/room.service');
 const analyticsService = require('../../services/admin/analytics.service');
 const promotionService = require('../../services/admin/promotion.service');
 const bookingHistoryService = require('../../services/admin/history.service');
-
+const {deleteBranch, updateBranch} = require('../../services/admin/branch.service');
+const {createRoom, deleteRoom, updateRoom} = require('../../services/admin/room.service');
 
 // Initialize passport for this router
 const passport = configPassport();
@@ -48,6 +45,7 @@ customerRouter.get('/profile', userService.getUserById);
 // Booking routes
 customerRouter.get('/booking/my', bookingService.getMyBookings);
 customerRouter.post('/booking/:id/cancel', validateBookingCancellation, bookingService.requestCancellation);
+customerRouter.delete('/booking/:bookingId', bookingService.cancelledPendingBooking);
 
 router.get('/booking/room/:roomId/availability', bookingService.getRoomAvailability);
 
@@ -59,7 +57,6 @@ customerRouter.post('/booking', bookingService.createBooking);
 customerRouter.post('/verify/:transactionId', bookingService.verifyPayment);
 customerRouter.get('/history/:bookingId', bookingService.getPaymentHistory);
 customerRouter.get('/status/:transactionId', bookingService.getPaymentStatus);
-
 
 //favorite room routes
 customerRouter.post('/favorite-room', roomService.toggleFavoriteRoom);
@@ -121,7 +118,6 @@ customerRouter.get('/branch/photo', branchService.getBranchPhotos);
 customerRouter.get('/room/occupied-times', bookingService.getOccupiedRoomBookingTimes)
 customerRouter.get('/room/details', roomService.getRoomDetails)
 
-
 ownerRouter.get('/analytics/overview', analyticsService.getOwnerOverview);
 ownerRouter.get('/analytics/revenue-trends', analyticsService.getOwnerRevenueTrends);
 ownerRouter.get('/analytics/branch-performance', analyticsService.getOwnerBranchPerformance);
@@ -138,8 +134,6 @@ ownerRouter.post('/cancellation-requests/:id/approve', bookingService.approveCan
 ownerRouter.post('/cancellation-requests/:id/reject', bookingService.rejectCancellation);
 
 ownerRouter.delete('/delete/image', branchService.deletePhoto);
-
-
 
 // Register role-specific routers with the private router
 privateRouter.use('/owner', ownerRouter);

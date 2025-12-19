@@ -414,6 +414,47 @@ async function getOccupiedRoomBookingTimes(req, res) {
     }
 }
 
+async function cancelledPendingBooking(req, res){
+    try{
+        const { bookingId } = req.params;
+        const userId = req.user.id;
+
+        // First, fetch the booking to verify ownership
+        const booking = await bookingController.getBookingById(bookingId);
+
+        if (!booking) {
+            return errorResponse(res, 'Booking not found', 404);
+        }
+
+        // Check if user owns this booking
+        if (booking.customer_id !== userId) {
+            return errorResponse(res, 'Unauthorized: You can only cancel your own bookings', 403);
+        }
+
+        // Check if booking is in a cancellable state
+        if (!['pending'].includes(booking.status)) {
+            return errorResponse(res, `Cannot cancel booking with status: ${booking.status}`, 400);
+        }
+
+        const result = await bookingController.cancelBooking(bookingId, userId, req.user.role);
+
+        // Emit socket event for cancellation
+        const io = req.app.get('io');
+        if (io) {
+            BookingEmitter.notifyBookingCancelled(io, booking.room_id, bookingId, {
+                cancelledBy: 'customer',
+                userId: userId
+            });
+        }
+
+        return successResponse(res, result, 'Booking cancelled successfully');
+    } catch (error) {
+        console.error('Error in cancelledPendingBooking:', error);
+        return errorResponse(res, error.message || 'Failed to cancel booking', 500);
+    }
+}
+
+
 module.exports = {
     createBooking,
     verifyPayment,
@@ -427,5 +468,6 @@ module.exports = {
     rejectCancellation,
     getPendingCancellationRequests,
     updateBookingStatus,
-    getOccupiedRoomBookingTimes
+    getOccupiedRoomBookingTimes,
+    cancelledPendingBooking
 };

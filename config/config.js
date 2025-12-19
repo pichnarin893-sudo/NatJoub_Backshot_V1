@@ -25,8 +25,10 @@ const baseConfig = {
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     dialect: 'postgres',
+    timezone: '+00:00', // Store in UTC (standard practice)
     logging: false,
     dialectOptions: {
+        useUTC: true,
     },
 
 };
@@ -38,8 +40,10 @@ const testConfig = {
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     dialect: 'postgres',
+    timezone: '+00:00', // Store in UTC (standard practice)
     logging: false,
     dialectOptions: {
+        useUTC: true,
     },
 
 };
@@ -51,8 +55,10 @@ const productionConfig = {
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     dialect: 'postgres',
+    timezone: '+00:00', // Store in UTC (standard practice)
     logging: false,
     dialectOptions: {
+        useUTC: true,
     },
 
 };
