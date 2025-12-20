@@ -75,10 +75,24 @@ async function sendOTPEmail(to, otp) {
       `
         };
 
-        await transporter.sendMail(mailOptions);
+        console.log(`📤 Attempting to send OTP email to: ${to}`);
+        const info = await transporter.sendMail(mailOptions);
+        console.log('✅ OTP email sent successfully:', {
+            messageId: info.messageId,
+            recipient: to,
+            response: info.response
+        });
         return true;
     } catch (error) {
-        console.error('Failed to send OTP email:', error);
+        console.error('❌ Failed to send OTP email:', {
+            recipient: to,
+            error: error.message,
+            code: error.code,
+            command: error.command,
+            response: error.response,
+            responseCode: error.responseCode
+        });
+        console.error('Full error:', error);
         return false;
     }
 }
@@ -206,11 +220,26 @@ The ${process.env.APP_NAME || 'Your App'} Team
             `.trim()
         };
 
+        console.log(`📤 Attempting to send registration OTP email to: ${email}`);
         const info = await transporter.sendMail(mailOptions);
-        console.log('Registration OTP email sent:', info.messageId);
+        console.log('✅ Registration OTP email sent successfully:', {
+            messageId: info.messageId,
+            recipient: email,
+            username: username,
+            response: info.response
+        });
         return { success: true, messageId: info.messageId };
     } catch (error) {
-        console.error('Error sending registration OTP email:', error);
+        console.error('❌ Failed to send registration OTP email:', {
+            recipient: email,
+            username: username,
+            error: error.message,
+            code: error.code,
+            command: error.command,
+            response: error.response,
+            responseCode: error.responseCode
+        });
+        console.error('Full error:', error);
         throw new Error('Failed to send verification email');
     }
 }
