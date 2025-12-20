@@ -12,6 +12,10 @@ try {
 }
 
 const app = express();
+
+// Trust proxy for Railway/production environments (required for rate limiting)
+app.set('trust proxy', 1);
+
 const port = process.env.PORT || 3000;
 const configPassport = require('./config/passport');
 const cors = require("cors");
