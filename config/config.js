@@ -55,7 +55,7 @@ const productionConfig = {
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     dialect: 'postgres',
-    timezone: '+00:00', // Store in UTC (standard practice)
+    timezone: '+00:00',
     logging: false,
     dialectOptions: {
         useUTC: true,

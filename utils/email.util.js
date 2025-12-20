@@ -1,5 +1,10 @@
 const nodemailer = require("nodemailer");
 
+// Debug: Log email configuration (mask password for security)
+console.log('📧 Email Configuration:');
+console.log('  EMAIL_USER:', process.env.EMAIL_USER);
+console.log('  EMAIL_PASS:', process.env.EMAIL_PASS ? `${process.env.EMAIL_PASS.substring(0, 4)}...${process.env.EMAIL_PASS.substring(process.env.EMAIL_PASS.length - 4)} (length: ${process.env.EMAIL_PASS.length})` : 'NOT SET');
+
 // Create a transporter for sending emails via Gmail
 const transporter = nodemailer.createTransport({
     service: 'gmail',

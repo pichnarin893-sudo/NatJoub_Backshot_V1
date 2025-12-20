@@ -241,7 +241,7 @@ console.log('  End stored (UTC):', booking.end_time.toISOString());
         });
     }
 
-    async requestCancellation(bookingId, userId, userRole = 'customer', cancellationReason = null) {
+    async requestCancellation(bookingId, userId, cancellationReason = null) {
         const transaction = await sequelize.transaction();
         try {
             // Fetch booking with payment and room information
@@ -265,11 +265,6 @@ console.log('  End stored (UTC):', booking.end_time.toISOString());
             });
 
             if (!booking) throw new Error('Booking not found');
-
-            // Authorization check
-            if (userRole !== 'admin' && booking.customer_id !== userId) {
-                throw new Error('Unauthorized: You can only cancel your own bookings');
-            }
 
             // Check if already has a pending cancellation request
             if (booking.status === 'cancellation_requested') {
