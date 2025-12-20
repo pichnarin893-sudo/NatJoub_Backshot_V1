@@ -7,10 +7,25 @@ console.log('  EMAIL_PASS:', process.env.EMAIL_PASS ? `${process.env.EMAIL_PASS.
 
 // Create a transporter for sending emails via Gmail
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // Use STARTTLS
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
+    },
+    tls: {
+        rejectUnauthorized: false // Accept self-signed certificates (for Railway compatibility)
+    }
+});
+
+// Verify SMTP connection on startup
+transporter.verify(function (error, success) {
+    if (error) {
+        console.error('❌ SMTP Connection Error:', error.message);
+        console.error('   Make sure EMAIL_USER and EMAIL_PASS are set correctly');
+    } else {
+        console.log('✅ SMTP Server is ready to send emails');
     }
 });
 
@@ -23,7 +38,7 @@ const transporter = nodemailer.createTransport({
 async function sendOTPEmail(to, otp) {
     try {
         const mailOptions = {
-            from: `"ALS Smart School" <${process.env.EMAIL_USER}>`,
+            from: `"NatJoub - ណាត់ជួប" <${process.env.EMAIL_USER}>`,
             to,
             subject: "Your OTP Authentication Code",
             text: `Your OTP code is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you did not request this code, please ignore this email.`,
