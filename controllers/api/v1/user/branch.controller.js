@@ -102,7 +102,35 @@ async function getBranchesByOwner(ownerId){
 
         console.log("User's branch IDs:", branchIds);
 
-        return ownerBranches;
+        // Fetch photos for all branches
+        const branchPhotosMap = {};
+        if (branchIds.length > 0) {
+            const branchPhotos = await photos.findAll({
+                where: {
+                    entity_type: 'branches',
+                    entity_id: branchIds
+                },
+                attributes: ['id', 'public_url', 'display_order', 'entity_id'],
+                order: [['display_order', 'ASC'], ['createdAt', 'ASC']]
+            });
+
+            branchPhotos.forEach(photo => {
+                if (!branchPhotosMap[photo.entity_id]) {
+                    branchPhotosMap[photo.entity_id] = [];
+                }
+                branchPhotosMap[photo.entity_id].push({
+                    id: photo.id,
+                    public_url: photo.public_url,
+                    display_order: photo.display_order
+                });
+            });
+        }
+
+        // Add photos to branches
+        return ownerBranches.map(branch => ({
+            ...branch.toJSON(),
+            branchPhotos: branchPhotosMap[branch.id] || []
+        }));
 
     }catch(error){
         console.error('Error retrieving branches by owner:', error);
@@ -124,7 +152,7 @@ async function getRoomByBranch(ownerId, branchId) {
             throw new Error("You do not own this branch or it doesn't exist.");
         }
 
-        return await rooms.findAll({
+        const roomsData = await rooms.findAll({
             where: {branch_id: branchId},
             attributes: [
                 'id',
@@ -135,6 +163,38 @@ async function getRoomByBranch(ownerId, branchId) {
                 'is_available'
             ]
         });
+
+        // Fetch photos for all rooms
+        const roomIds = roomsData.map(room => room.id);
+        const roomPhotosMap = {};
+
+        if (roomIds.length > 0) {
+            const roomPhotos = await photos.findAll({
+                where: {
+                    entity_type: 'rooms',
+                    entity_id: roomIds
+                },
+                attributes: ['id', 'public_url', 'display_order', 'entity_id'],
+                order: [['display_order', 'ASC'], ['createdAt', 'ASC']]
+            });
+
+            roomPhotos.forEach(photo => {
+                if (!roomPhotosMap[photo.entity_id]) {
+                    roomPhotosMap[photo.entity_id] = [];
+                }
+                roomPhotosMap[photo.entity_id].push({
+                    id: photo.id,
+                    public_url: photo.public_url,
+                    display_order: photo.display_order
+                });
+            });
+        }
+
+        // Add photos to rooms
+        return roomsData.map(room => ({
+            ...room.toJSON(),
+            roomPhotos: roomPhotosMap[room.id] || []
+        }));
 
     } catch (error) {
         console.error('Error retrieving rooms by branch:', error);

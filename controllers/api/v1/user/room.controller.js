@@ -16,7 +16,7 @@ async function getAllRooms(userId){
 
         console.log("User's branch IDs:", branchIds);
 
-        return await rooms.findAll({
+        const roomsData = await rooms.findAll({
             where: {
                 branch_id: {
                     [Op.in]: branchIds
@@ -34,6 +34,38 @@ async function getAllRooms(userId){
                 'updatedAt'
             ]
         });
+
+        // Fetch photos for all rooms
+        const roomIds = roomsData.map(room => room.id);
+        const roomPhotosMap = {};
+
+        if (roomIds.length > 0) {
+            const roomPhotos = await photos.findAll({
+                where: {
+                    entity_type: 'rooms',
+                    entity_id: roomIds
+                },
+                attributes: ['id', 'public_url', 'display_order', 'entity_id'],
+                order: [['display_order', 'ASC'], ['createdAt', 'ASC']]
+            });
+
+            roomPhotos.forEach(photo => {
+                if (!roomPhotosMap[photo.entity_id]) {
+                    roomPhotosMap[photo.entity_id] = [];
+                }
+                roomPhotosMap[photo.entity_id].push({
+                    id: photo.id,
+                    public_url: photo.public_url,
+                    display_order: photo.display_order
+                });
+            });
+        }
+
+        // Add photos to rooms
+        return roomsData.map(room => ({
+            ...room.toJSON(),
+            roomPhotos: roomPhotosMap[room.id] || []
+        }));
 
     } catch(error) {
         console.error('Error in getAllRooms:', error);
@@ -95,6 +127,7 @@ async function getFavoriteRooms(userId) {
                     model: rooms,
                     as: 'room',
                     attributes: [
+                        'id',
                         'room_no',
                         'people_capacity',
                         'price_per_hour',
@@ -106,6 +139,7 @@ async function getFavoriteRooms(userId) {
                             model: branches,
                             as: 'branch',
                             attributes: [
+                                'id',
                                 'branch_name',
                                 'work_days',
                                 'open_times',
@@ -127,7 +161,59 @@ async function getFavoriteRooms(userId) {
             ]
         });
 
-        // flatten response
+        // Collect all room IDs and branch IDs
+        const roomIds = favoriteRooms.map(fav => fav.room_id).filter(id => id);
+        const branchIds = favoriteRooms.map(fav => fav.branch_id).filter(id => id);
+
+        // Fetch room photos
+        const roomPhotosMap = {};
+        if (roomIds.length > 0) {
+            const roomPhotos = await photos.findAll({
+                where: {
+                    entity_type: 'rooms',
+                    entity_id: roomIds
+                },
+                attributes: ['id', 'public_url', 'display_order', 'entity_id'],
+                order: [['display_order', 'ASC'], ['createdAt', 'ASC']]
+            });
+
+            roomPhotos.forEach(photo => {
+                if (!roomPhotosMap[photo.entity_id]) {
+                    roomPhotosMap[photo.entity_id] = [];
+                }
+                roomPhotosMap[photo.entity_id].push({
+                    id: photo.id,
+                    public_url: photo.public_url,
+                    display_order: photo.display_order
+                });
+            });
+        }
+
+        // Fetch branch photos
+        const branchPhotosMap = {};
+        if (branchIds.length > 0) {
+            const branchPhotos = await photos.findAll({
+                where: {
+                    entity_type: 'branches',
+                    entity_id: branchIds
+                },
+                attributes: ['id', 'public_url', 'display_order', 'entity_id'],
+                order: [['display_order', 'ASC'], ['createdAt', 'ASC']]
+            });
+
+            branchPhotos.forEach(photo => {
+                if (!branchPhotosMap[photo.entity_id]) {
+                    branchPhotosMap[photo.entity_id] = [];
+                }
+                branchPhotosMap[photo.entity_id].push({
+                    id: photo.id,
+                    public_url: photo.public_url,
+                    display_order: photo.display_order
+                });
+            });
+        }
+
+        // flatten response with photos
         return favoriteRooms.map(fav => ({
             id: fav.id,
             user_id: fav.user_id,
@@ -140,12 +226,14 @@ async function getFavoriteRooms(userId) {
             price_per_hour: fav.room?.price_per_hour,
             equipments: fav.room?.equipments,
             is_available: fav.room?.is_available,
+            roomPhotos: roomPhotosMap[fav.room_id] || [],
             branch_name: fav.room?.branch?.branch_name,
             work_days: fav.room?.branch?.work_days,
             open_times: fav.room?.branch?.open_times,
             close_times: fav.room?.branch?.close_times,
             address: fav.room?.branch?.address,
-            location_url: fav.room?.branch?.location_url
+            location_url: fav.room?.branch?.location_url,
+            branchPhotos: branchPhotosMap[fav.branch_id] || []
         }));
     } catch (error) {
         console.error('Error in getFavoriteRooms:', error);
@@ -210,6 +298,32 @@ async function getRoomsByBranch(branchId, userId) {
 
         const favoriteRoomIds = favoriteRooms.map(fav => fav.room_id);
 
+        // Fetch photos for all rooms
+        const roomIds = roomsData.map(room => room.id);
+        const roomPhotosMap = {};
+
+        if (roomIds.length > 0) {
+            const roomPhotos = await photos.findAll({
+                where: {
+                    entity_type: 'rooms',
+                    entity_id: roomIds
+                },
+                attributes: ['id', 'public_url', 'display_order', 'entity_id'],
+                order: [['display_order', 'ASC'], ['createdAt', 'ASC']]
+            });
+
+            roomPhotos.forEach(photo => {
+                if (!roomPhotosMap[photo.entity_id]) {
+                    roomPhotosMap[photo.entity_id] = [];
+                }
+                roomPhotosMap[photo.entity_id].push({
+                    id: photo.id,
+                    public_url: photo.public_url,
+                    display_order: photo.display_order
+                });
+            });
+        }
+
         return roomsData.map(room => ({
             id: room.id,
             room_no: room.room_no,
@@ -217,7 +331,8 @@ async function getRoomsByBranch(branchId, userId) {
             price_per_hour: room.price_per_hour,
             equipments: room.equipments,
             is_available: room.is_available,
-            is_favorite: favoriteRoomIds.includes(room.id)
+            is_favorite: favoriteRoomIds.includes(room.id),
+            roomPhotos: roomPhotosMap[room.id] || []
         }));
     } catch (error) {
         console.error('Error in getRoomsByBranch:', error);

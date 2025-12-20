@@ -1,4 +1,4 @@
-const {rooms, branches, sequelize} = require("../../../../models");
+const {rooms, branches, sequelize, photos} = require("../../../../models");
 
 
 async function createRoom(branch_id ,roomData){
@@ -75,9 +75,29 @@ async function createRoom(branch_id ,roomData){
 
 async function getRooms() {
     try {
-        return await rooms.findAll({
+        const roomsData = await rooms.findAll({
             order: [['createdAt', 'DESC']]
         });
+
+        const roomsWithPhotos = await Promise.all(
+            roomsData.map(async (room) => {
+                const roomPhotos = await photos.findAll({
+                    where: {
+                        entity_type: 'rooms',
+                        entity_id: room.id
+                    },
+                    attributes: ['id', 'public_url', 'display_order'],
+                    order: [['display_order', 'ASC'], ['createdAt', 'ASC']]
+                });
+
+                return {
+                    ...room.toJSON(),
+                    roomPhotos: roomPhotos
+                };
+            })
+        );
+
+        return roomsWithPhotos;
     } catch (error) {
         console.error('Error fetching rooms:', error);
         throw error;
@@ -86,7 +106,25 @@ async function getRooms() {
 
 async function getRoomById(roomId) {
     try {
-        return await rooms.findByPk(roomId);
+        const room = await rooms.findByPk(roomId);
+
+        if (!room) {
+            throw new Error('Room not found');
+        }
+
+        const roomPhotos = await photos.findAll({
+            where: {
+                entity_type: 'rooms',
+                entity_id: roomId
+            },
+            attributes: ['id', 'public_url', 'display_order'],
+            order: [['display_order', 'ASC'], ['createdAt', 'ASC']]
+        });
+
+        return {
+            ...room.toJSON(),
+            roomPhotos: roomPhotos
+        };
     }catch (error){
         console.error('Error fetching room by ID:', error);
         throw error;

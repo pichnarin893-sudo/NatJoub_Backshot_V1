@@ -1,4 +1,4 @@
-const { promotions, branch_promotions, room_promotions } = require('../../../../models');
+const { promotions, branch_promotions, room_promotions, branches, rooms, photos } = require('../../../../models');
 const { Op, where } = require('sequelize');
 
 async function createPromoCode(data, creatorId) {
@@ -53,14 +53,109 @@ async function getAllPromoCode() {
 async function getPromoCodeById(promotionId) {
     const promotion = await promotions.findByPk(promotionId, {
         include: [
-            { model: branch_promotions, as: 'branch_promotions' },
-            { model: room_promotions, as: 'room_promotions' }
+            {
+                model: branch_promotions,
+                as: 'branch_promotions',
+                include: [
+                    {
+                        model: branches,
+                        as: 'branch',
+                        attributes: ['id', 'branch_name', 'work_days', 'open_times', 'close_times', 'descriptions', 'address', 'location_url']
+                    }
+                ]
+            },
+            {
+                model: room_promotions,
+                as: 'room_promotions',
+                include: [
+                    {
+                        model: rooms,
+                        as: 'room',
+                        attributes: ['id', 'room_no', 'people_capacity', 'price_per_hour', 'equipments', 'is_available']
+                    }
+                ]
+            }
         ]
     });
 
     if (!promotion) throw new Error('Promo Code not found');
 
-    return promotion;
+    // Fetch photos for all branches
+    const branchIds = promotion.branch_promotions?.map(bp => bp.branch_id) || [];
+    const branchPhotosMap = {};
+
+    if (branchIds.length > 0) {
+        const branchPhotos = await photos.findAll({
+            where: {
+                entity_type: 'branches',
+                entity_id: branchIds
+            },
+            attributes: ['id', 'public_url', 'display_order', 'entity_id'],
+            order: [['display_order', 'ASC'], ['createdAt', 'ASC']]
+        });
+
+        branchPhotos.forEach(photo => {
+            if (!branchPhotosMap[photo.entity_id]) {
+                branchPhotosMap[photo.entity_id] = [];
+            }
+            branchPhotosMap[photo.entity_id].push({
+                id: photo.id,
+                public_url: photo.public_url,
+                display_order: photo.display_order
+            });
+        });
+    }
+
+    // Fetch photos for all rooms
+    const roomIds = promotion.room_promotions?.map(rp => rp.room_id) || [];
+    const roomPhotosMap = {};
+
+    if (roomIds.length > 0) {
+        const roomPhotos = await photos.findAll({
+            where: {
+                entity_type: 'rooms',
+                entity_id: roomIds
+            },
+            attributes: ['id', 'public_url', 'display_order', 'entity_id'],
+            order: [['display_order', 'ASC'], ['createdAt', 'ASC']]
+        });
+
+        roomPhotos.forEach(photo => {
+            if (!roomPhotosMap[photo.entity_id]) {
+                roomPhotosMap[photo.entity_id] = [];
+            }
+            roomPhotosMap[photo.entity_id].push({
+                id: photo.id,
+                public_url: photo.public_url,
+                display_order: photo.display_order
+            });
+        });
+    }
+
+    // Add photos to the response
+    const promotionData = promotion.toJSON();
+
+    if (promotionData.branch_promotions) {
+        promotionData.branch_promotions = promotionData.branch_promotions.map(bp => ({
+            ...bp,
+            branch: bp.branch ? {
+                ...bp.branch,
+                branchPhotos: branchPhotosMap[bp.branch_id] || []
+            } : null
+        }));
+    }
+
+    if (promotionData.room_promotions) {
+        promotionData.room_promotions = promotionData.room_promotions.map(rp => ({
+            ...rp,
+            room: rp.room ? {
+                ...rp.room,
+                roomPhotos: roomPhotosMap[rp.room_id] || []
+            } : null
+        }));
+    }
+
+    return promotionData;
 }
 
 async function updatePromoCode(promotionId, data) {
