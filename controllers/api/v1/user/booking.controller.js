@@ -617,7 +617,7 @@ console.log('  End stored (UTC):', booking.end_time.toISOString());
             const totalCancellations = await bookings.count({
                 where: {
                     customer_id: userId,
-                    status: 'cancelled'
+                    status: 'refunded'
                 },
                 transaction
             });
@@ -690,7 +690,8 @@ console.log('  End stored (UTC):', booking.end_time.toISOString());
     async getRoomBookings(roomId, date = null) {
         const whereClause = {
             room_id: roomId,
-            status: {[Op.ne]: 'cancelled'}
+            // Only show bookings that actually occupy the room
+            status: {[Op.notIn]: ['cancelled', 'expired', 'failed']}
         };
 
         if (date) {

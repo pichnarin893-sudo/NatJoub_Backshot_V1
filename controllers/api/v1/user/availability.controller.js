@@ -38,7 +38,9 @@ class AvailabilityController {
         const roomBookings = await bookings.findAll({
             where: {
                 room_id: roomId,
-                status: { [Op.ne]: 'cancelled' },
+                // Only show bookings that actually occupy the room
+                // Exclude: cancelled, expired (payment timeout), failed (payment failed)
+                status: { [Op.notIn]: ['cancelled', 'expired', 'failed'] },
                 start_time: { [Op.between]: [startOfDay, endOfDay] }
             },
             include: [{
@@ -86,7 +88,7 @@ class AvailabilityController {
         const overlapping = await bookings.findOne({
             where: {
                 room_id: roomId,
-                status: { [Op.notIn]: ['cancelled'] },
+                status: { [Op.notIn]: ['cancelled', 'expired', 'failed'] },
                 [Op.or]: [
                     { start_time: { [Op.lte]: start }, end_time: { [Op.gt]: start } },
                     { start_time: { [Op.lt]: end }, end_time: { [Op.gte]: end } },
