@@ -87,60 +87,110 @@ module.exports = {
         ];
 
         /**
-         * Booking Status: 'pending', 'completed', 'cancelled', 'failed', 'expired', 'cancellation_requested'
-         * Payment Status: 'pending', 'completed', 'failed', 'expired', 'cancelled', 'refunded'
-
-         *  pending                  pending         Waiting for payment
-         *  completed                completed       Payment successful, booking valid
-         *  cancelled                cancelled       User cancelled before paying
-         *  cancelled                refunded        User cancelled after paying (got refund)
-         *  failed                   failed          Payment failed (card declined, error)
-         *  expired                  expired         Payment timeout (abandoned)
-         *  cancellation_requested   completed       User requested cancellation, awaiting approval |
+         * BOOKING & PAYMENT STATUS MAPPING:
+         * ─────────────────────────────────────────────────────────────────────────
+         * Booking Status          | Payment Status   | Refund Status | Description
+         * ─────────────────────────────────────────────────────────────────────────
+         * pending                 | pending          | none          | Waiting for payment (has QR)
+         * completed               | completed        | none          | Payment successful, booking valid
+         * cancelled               | cancelled        | none          | User cancelled BEFORE paying
+         * failed                  | failed           | none          | Payment failed (card declined, error)
+         * expired                 | expired          | none          | Payment timeout (QR expired, abandoned)
+         * cancellation_requested  | completed        | pending       | User requested cancellation, awaiting approval
+         * refunded                | refunded         | completed     | Cancellation approved, refund processed
+         * ─────────────────────────────────────────────────────────────────────────
+         * 
+         * Booking Status Enum: pending, cancelled, completed, failed, expired, refunded, cancellation_requested
+         * Payment Status Enum: pending, completed, failed, expired, cancelled, refunded
+         * Refund Status Enum: none, pending, completed
          */
 
-            // Booking status distribution (weighted)
-            // 60% completed, 8% pending, 12% cancelled, 5% failed, 5% expired, 10% cancellation_requested
-        const getBookingStatus = () => {
-                const rand = Math.random();
-                if (rand < 0.60) return 'completed';
-                if (rand < 0.68) return 'pending';
-                if (rand < 0.80) return 'cancelled';
-                if (rand < 0.85) return 'failed';
-                if (rand < 0.90) return 'expired';
-                return 'cancellation_requested';
-            };
+        // Payment status codes mapping
+        const PAYMENT_STATUS_CODES = {
+            pending: 0,
+            completed: 1,
+            failed: 2,
+            cancelled: 3,
+            refunded: 4,
+            expired: 5,
+        };
 
-        // Payment status based on booking status
-        const getPaymentStatus = (bookingStatus) => {
+        // Booking status distribution (weighted)
+        // 55% completed, 8% pending, 8% cancelled, 5% failed, 5% expired, 10% cancellation_requested, 9% refunded
+        const getBookingStatus = () => {
+            const rand = Math.random();
+            if (rand < 0.55) return 'completed';
+            if (rand < 0.63) return 'pending';
+            if (rand < 0.71) return 'cancelled';  // Cancelled before payment
+            if (rand < 0.76) return 'failed';
+            if (rand < 0.81) return 'expired';
+            if (rand < 0.91) return 'cancellation_requested';
+            return 'refunded';  // Cancelled after payment, refund completed
+        };
+
+        // Payment and refund status based on booking status
+        const getPaymentAndRefundStatus = (bookingStatus) => {
             switch (bookingStatus) {
                 case 'completed':
-                    return 'completed';
+                    return { paymentStatus: 'completed', refundStatus: 'none' };
                 case 'pending':
-                    return 'pending';
+                    return { paymentStatus: 'pending', refundStatus: 'none' };
                 case 'cancelled':
-                    // 70% were paid then refunded, 30% cancelled before payment
-                    return Math.random() < 0.7 ? 'refunded' : 'cancelled';
+                    // Cancelled before payment - no refund needed
+                    return { paymentStatus: 'cancelled', refundStatus: 'none' };
                 case 'failed':
-                    return 'failed';
+                    return { paymentStatus: 'failed', refundStatus: 'none' };
                 case 'expired':
-                    return 'expired';
+                    return { paymentStatus: 'expired', refundStatus: 'none' };
                 case 'cancellation_requested':
-                    // Was paid, now requesting cancellation
-                    return 'completed';
+                    // Was paid, now requesting cancellation - refund pending approval
+                    return { paymentStatus: 'completed', refundStatus: 'pending' };
+                case 'refunded':
+                    // Was paid, cancellation approved, refund completed
+                    return { paymentStatus: 'refunded', refundStatus: 'completed' };
                 default:
-                    return 'pending';
+                    return { paymentStatus: 'pending', refundStatus: 'none' };
             }
         };
 
-        // Refund percentage options
+        // Refund percentage options (for cancelled bookings with refunds)
         const refundPercentages = [100, 75, 50, 25, 0];
 
-        // Generate transaction ID
-        const generateTransactionId = () => {
-            const timestamp = Date.now().toString(36);
-            const randomPart = Math.random().toString(36).substring(2, 10).toUpperCase();
-            return `TXN-${timestamp}-${randomPart}`;
+        // Counter for unique IDs
+        let transactionCounter = 0;
+        let apvCounter = 0;
+
+        // Generate unique transaction ID
+        const generateTransactionId = (datePrefix) => {
+            transactionCounter++;
+            const datePart = datePrefix.toISOString().slice(0, 10).replace(/-/g, '');
+            const counterPart = String(transactionCounter).padStart(6, '0');
+            const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+            return `TXN-${datePart}-${counterPart}-${randomPart}`;
+        };
+
+        // Generate unique APV (Approval Code)
+        const generateAPV = () => {
+            apvCounter++;
+            const counterPart = String(apvCounter).padStart(8, '0');
+            return `APV${counterPart}`;
+        };
+
+        // Generate mock QR string (simulates ABA PayWay QR format)
+        const generateQRString = (transactionId, amount) => {
+            const merchantId = 'NETJOUB001';
+            const timestamp = Date.now();
+            return `00020101021129370016${merchantId}0208${transactionId}5303840540${amount.toFixed(2)}5802KH5913NetJoub Space6010Phnom Penh62070503***6304${timestamp.toString(16).toUpperCase()}`;
+        };
+
+        // Generate mock QR image URL (base64 placeholder or URL)
+        const generateQRImage = (transactionId) => {
+            return `https://api.ababank.com/payway/qr/${transactionId}.png`;
+        };
+
+        // Generate mock ABA deeplink
+        const generateABADeeplink = (transactionId, amount) => {
+            return `aba://payway?txn=${transactionId}&amt=${amount.toFixed(2)}&merchant=NETJOUB001`;
         };
 
         // Helper functions
@@ -159,13 +209,18 @@ module.exports = {
             return dates;
         };
 
+        // Calculate gateway fee (2.5% for ABA PayWay)
+        const calculateGatewayFee = (amount) => {
+            return parseFloat((amount * 0.025).toFixed(2));
+        };
+
         // Generate bookings and payments
         const bookings = [];
         const payments = [];
         const customerStats = {}; // Track stats per customer
 
         const startDate = '2025-05-01';
-        const endDate = '2025-12-15';
+        const endDate = '2025-12-22';
         const dates = getDateRange(startDate, endDate);
 
         for (const date of dates) {
@@ -173,7 +228,7 @@ module.exports = {
                 const timeSlot = timeSlots[Math.floor(Math.random() * timeSlots.length)];
                 const customerId = getRandomCustomer();
                 const bookingStatus = getBookingStatus();
-                const paymentStatus = getPaymentStatus(bookingStatus);
+                const { paymentStatus, refundStatus } = getPaymentAndRefundStatus(bookingStatus);
 
                 // Create start and end datetime
                 const startTime = new Date(date);
@@ -184,7 +239,7 @@ module.exports = {
 
                 // Calculate duration and price
                 const durationHours = timeSlot.end - timeSlot.start;
-                const totalPrice = durationHours * room.hourlyPrice;
+                const totalPrice = parseFloat((durationHours * room.hourlyPrice).toFixed(3));
 
                 // Initialize customer stats if needed
                 if (!customerStats[customerId]) {
@@ -199,7 +254,16 @@ module.exports = {
                 customerStats[customerId].total_bookings++;
 
                 const bookingId = uuidv4();
-                const bookingCreatedAt = new Date(startTime.getTime() - (Math.random() * 7 * 24 * 60 * 60 * 1000)); // Created 0-7 days before
+                // Booking created 1-7 days before the start time
+                const daysBeforeBooking = 1 + Math.floor(Math.random() * 6);
+                const bookingCreatedAt = new Date(startTime.getTime() - (daysBeforeBooking * 24 * 60 * 60 * 1000));
+                // Add random hours/minutes for realism
+                bookingCreatedAt.setHours(
+                    8 + Math.floor(Math.random() * 12), // Between 8 AM and 8 PM
+                    Math.floor(Math.random() * 60),
+                    Math.floor(Math.random() * 60),
+                    0
+                );
 
                 // Build booking object
                 const booking = {
@@ -220,72 +284,33 @@ module.exports = {
                     updatedAt: bookingCreatedAt,
                 };
 
-                // Handle cancelled bookings
-                if (bookingStatus === 'cancelled') {
-                    const refundPercentage = paymentStatus === 'refunded' ? getRandomRefundPercentage() : null;
-                    const cancelledAt = new Date(bookingCreatedAt.getTime() + (Math.random() * 2 * 24 * 60 * 60 * 1000));
+                // Generate transaction ID for payment
+                const transactionId = generateTransactionId(bookingCreatedAt);
+                
+                // Payment created immediately after booking (within 1-5 seconds)
+                const paymentCreatedAt = new Date(bookingCreatedAt.getTime() + (1000 + Math.random() * 4000));
 
-                    booking.refund_percentage = refundPercentage;
-                    booking.cancellation_reason = getRandomCancellationReason();
-                    booking.cancelled_at = cancelledAt;
-                    booking.cancelled_by = customerId;
-                    booking.cancellation_requested_at = new Date(cancelledAt.getTime() - (Math.random() * 60 * 60 * 1000));
-                    booking.updatedAt = cancelledAt;
-
-                    // Update cancellation stats
-                    customerStats[customerId].total_cancellations++;
-                    if (!customerStats[customerId].last_cancellation_at ||
-                        cancelledAt > customerStats[customerId].last_cancellation_at) {
-                        customerStats[customerId].last_cancellation_at = cancelledAt;
-                    }
-                }
-
-                // Handle cancellation_requested bookings
-                if (bookingStatus === 'cancellation_requested') {
-                    const requestedAt = new Date(bookingCreatedAt.getTime() + (Math.random() * 3 * 24 * 60 * 60 * 1000));
-                    booking.cancellation_reason = getRandomCancellationReason();
-                    booking.cancellation_requested_at = requestedAt;
-                    booking.updatedAt = requestedAt;
-                }
-
-                // Handle failed bookings
-                if (bookingStatus === 'failed') {
-                    const failedAt = new Date(bookingCreatedAt.getTime() + (Math.random() * 10 * 60 * 1000)); // Failed within 10 mins
-                    booking.updatedAt = failedAt;
-                }
-
-                // Handle expired bookings
-                if (bookingStatus === 'expired') {
-                    const expiredAt = new Date(bookingCreatedAt.getTime() + (15 * 60 * 1000)); // Expired after 15 mins
-                    booking.updatedAt = expiredAt;
-                }
-
-                bookings.push(booking);
-
-                // Create corresponding payment
-                const transactionId = generateTransactionId();
-                const paymentCreatedAt = new Date(bookingCreatedAt.getTime() + (Math.random() * 30 * 60 * 1000));
-
+                // Build payment object with all fields
                 const payment = {
                     id: uuidv4(),
                     booking_id: bookingId,
                     transaction_id: transactionId,
-                    amount: totalPrice,
+                    amount: parseFloat(totalPrice.toFixed(2)),
                     currency: 'USD',
                     payment_method: 'ABA_PAYWAY',
-                    qr_string: null,
-                    qr_image: null,
-                    abapay_deeplink: null,
+                    qr_string: generateQRString(transactionId, totalPrice),
+                    qr_image: generateQRImage(transactionId),
+                    abapay_deeplink: generateABADeeplink(transactionId, totalPrice),
                     payment_status: paymentStatus,
-                    payment_status_code: null,
-                    original_amount: totalPrice,
+                    payment_status_code: PAYMENT_STATUS_CODES[paymentStatus],
+                    original_amount: parseFloat(totalPrice.toFixed(2)),
                     refund_amount: 0,
                     discount_amount: 0,
                     apv: null,
                     transaction_date: null,
                     paid_at: null,
                     last_checked_at: paymentCreatedAt,
-                    refund_status: 'none',
+                    refund_status: refundStatus,
                     refund_transaction_id: null,
                     refunded_at: null,
                     gateway_fee_amount: 0,
@@ -293,55 +318,151 @@ module.exports = {
                     updatedAt: paymentCreatedAt,
                 };
 
-                // Set payment-specific fields based on status
-                switch (paymentStatus) {
-                    case 'completed':
-                        payment.payment_status_code = 1;
-                        payment.paid_at = new Date(paymentCreatedAt.getTime() + (Math.random() * 5 * 60 * 1000));
-                        payment.transaction_date = payment.paid_at;
-                        payment.apv = `APV${Date.now().toString().slice(-8)}`;
-                        payment.gateway_fee_amount = parseFloat((totalPrice * 0.025).toFixed(2));
-                        payment.updatedAt = payment.paid_at;
+                // Process based on booking/payment status
+                switch (bookingStatus) {
+                    case 'completed': {
+                        // Payment completed successfully
+                        // User pays within 1-10 minutes of payment creation
+                        const paymentDuration = (1 + Math.random() * 9) * 60 * 1000;
+                        const paidAt = new Date(paymentCreatedAt.getTime() + paymentDuration);
+                        
+                        payment.paid_at = paidAt;
+                        payment.transaction_date = paidAt;
+                        payment.apv = generateAPV();
+                        payment.gateway_fee_amount = calculateGatewayFee(totalPrice);
+                        payment.last_checked_at = paidAt;
+                        payment.updatedAt = paidAt;
+                        
+                        // Update booking updatedAt to reflect payment completion
+                        booking.updatedAt = paidAt;
                         break;
+                    }
 
-                    case 'refunded':
-                        payment.payment_status_code = 4;
-                        payment.paid_at = new Date(paymentCreatedAt.getTime() + (Math.random() * 5 * 60 * 1000));
-                        payment.transaction_date = payment.paid_at;
-                        payment.apv = `APV${Date.now().toString().slice(-8)}`;
-                        payment.gateway_fee_amount = parseFloat((totalPrice * 0.025).toFixed(2));
+                    case 'pending': {
+                        // Payment still pending - QR generated, waiting for user to pay
+                        // last_checked_at should be recent if booking hasn't expired yet
+                        const checkInterval = Math.random() * 5 * 60 * 1000; // Checked within last 5 mins
+                        payment.last_checked_at = new Date(Math.min(
+                            paymentCreatedAt.getTime() + checkInterval,
+                            now.getTime()
+                        ));
+                        break;
+                    }
 
-                        const refundPct = booking.refund_percentage || 100;
-                        payment.refund_amount = parseFloat((totalPrice * refundPct / 100).toFixed(2));
-                        payment.refund_status = 'completed';
+                    case 'cancelled': {
+                        // Cancelled before payment - user never paid
+                        const cancelDuration = (5 + Math.random() * 55) * 60 * 1000; // 5-60 mins after booking
+                        const cancelledAt = new Date(bookingCreatedAt.getTime() + cancelDuration);
+                        
+                        booking.cancellation_reason = getRandomCancellationReason();
+                        booking.cancelled_at = cancelledAt;
+                        booking.cancelled_by = customerId;
+                        booking.cancellation_requested_at = new Date(cancelledAt.getTime() - (Math.random() * 5 * 60 * 1000));
+                        booking.updatedAt = cancelledAt;
+                        
+                        payment.last_checked_at = cancelledAt;
+                        payment.updatedAt = cancelledAt;
+                        
+                        // Clear QR data since payment was never initiated/completed
+                        payment.qr_string = null;
+                        payment.qr_image = null;
+                        payment.abapay_deeplink = null;
+                        break;
+                    }
+
+                    case 'refunded': {
+                        // Booking was paid, then cancelled and refunded
+                        // First, payment was completed
+                        const paymentDuration = (1 + Math.random() * 9) * 60 * 1000;
+                        const paidAt = new Date(paymentCreatedAt.getTime() + paymentDuration);
+                        
+                        payment.paid_at = paidAt;
+                        payment.transaction_date = paidAt;
+                        payment.apv = generateAPV();
+                        payment.gateway_fee_amount = calculateGatewayFee(totalPrice);
+                        
+                        // Then, cancellation happened (1 hour to 2 days after payment)
+                        const cancelDelay = (1 + Math.random() * 47) * 60 * 60 * 1000;
+                        const cancelledAt = new Date(paidAt.getTime() + cancelDelay);
+                        
+                        const refundPercentage = getRandomRefundPercentage();
+                        booking.refund_percentage = refundPercentage;
+                        booking.cancellation_reason = getRandomCancellationReason();
+                        booking.cancelled_at = cancelledAt;
+                        booking.cancelled_by = customerId;
+                        booking.cancellation_requested_at = new Date(cancelledAt.getTime() - (Math.random() * 30 * 60 * 1000));
+                        
+                        // Calculate refund amount
+                        payment.refund_amount = parseFloat((totalPrice * refundPercentage / 100).toFixed(2));
                         payment.refund_transaction_id = `REF-${transactionId}`;
-                        payment.refunded_at = booking.cancelled_at
-                            ? new Date(booking.cancelled_at.getTime() + (Math.random() * 24 * 60 * 60 * 1000))
-                            : now;
-                        payment.updatedAt = payment.refunded_at;
+                        
+                        // Refund processed (1-24 hours after cancellation)
+                        const refundDelay = (1 + Math.random() * 23) * 60 * 60 * 1000;
+                        const refundedAt = new Date(cancelledAt.getTime() + refundDelay);
+                        payment.refunded_at = refundedAt;
+                        payment.last_checked_at = refundedAt;
+                        payment.updatedAt = refundedAt;
+                        
+                        booking.updatedAt = refundedAt;
+                        
+                        // Update cancellation stats
+                        customerStats[customerId].total_cancellations++;
+                        if (!customerStats[customerId].last_cancellation_at ||
+                            cancelledAt > customerStats[customerId].last_cancellation_at) {
+                            customerStats[customerId].last_cancellation_at = cancelledAt;
+                        }
                         break;
+                    }
 
-                    case 'cancelled':
-                        payment.payment_status_code = 3;
-                        payment.updatedAt = booking.cancelled_at || now;
+                    case 'failed': {
+                        // Payment failed after attempt
+                        const failDuration = (2 + Math.random() * 8) * 60 * 1000; // Failed 2-10 mins after creation
+                        const failedAt = new Date(paymentCreatedAt.getTime() + failDuration);
+                        
+                        payment.last_checked_at = failedAt;
+                        payment.updatedAt = failedAt;
+                        booking.updatedAt = failedAt;
                         break;
+                    }
 
-                    case 'failed':
-                        payment.payment_status_code = 2;
-                        payment.updatedAt = new Date(paymentCreatedAt.getTime() + (Math.random() * 10 * 60 * 1000));
+                    case 'expired': {
+                        // Payment expired (15-minute timeout)
+                        const expiredAt = new Date(paymentCreatedAt.getTime() + (15 * 60 * 1000));
+                        
+                        payment.last_checked_at = expiredAt;
+                        payment.updatedAt = expiredAt;
+                        booking.updatedAt = expiredAt;
                         break;
+                    }
 
-                    case 'expired':
-                        payment.payment_status_code = 5;
-                        payment.updatedAt = new Date(paymentCreatedAt.getTime() + (15 * 60 * 1000));
+                    case 'cancellation_requested': {
+                        // Payment was completed, now user is requesting cancellation
+                        const paymentDuration = (1 + Math.random() * 9) * 60 * 1000;
+                        const paidAt = new Date(paymentCreatedAt.getTime() + paymentDuration);
+                        
+                        payment.paid_at = paidAt;
+                        payment.transaction_date = paidAt;
+                        payment.apv = generateAPV();
+                        payment.gateway_fee_amount = calculateGatewayFee(totalPrice);
+                        
+                        // Cancellation requested (1-48 hours after payment)
+                        const requestDelay = (1 + Math.random() * 47) * 60 * 60 * 1000;
+                        const requestedAt = new Date(paidAt.getTime() + requestDelay);
+                        
+                        booking.refund_percentage = getRandomRefundPercentage(); // Proposed refund amount
+                        booking.cancellation_reason = getRandomCancellationReason();
+                        booking.cancellation_requested_at = requestedAt;
+                        booking.updatedAt = requestedAt;
+                        
+                        // Refund amount calculated but not yet processed
+                        payment.refund_amount = parseFloat((totalPrice * booking.refund_percentage / 100).toFixed(2));
+                        payment.last_checked_at = requestedAt;
+                        payment.updatedAt = requestedAt;
                         break;
-
-                    case 'pending':
-                    default:
-                        payment.payment_status_code = 0;
-                        break;
+                    }
                 }
 
+                bookings.push(booking);
                 payments.push(payment);
             }
         }
@@ -372,16 +493,16 @@ module.exports = {
             const batch = bookings.slice(i, i + batchSize);
             await queryInterface.bulkInsert('bookings', batch, {});
         }
-        console.log(` Seeded ${bookings.length} bookings`);
+        console.log(`✓ Seeded ${bookings.length} bookings`);
 
         for (let i = 0; i < payments.length; i += batchSize) {
             const batch = payments.slice(i, i + batchSize);
             await queryInterface.bulkInsert('payments', batch, {});
         }
-        console.log(` Seeded ${payments.length} payments`);
+        console.log(`✓ Seeded ${payments.length} payments`);
 
         await queryInterface.bulkInsert('user_cancellation_stats', userCancellationStats, {});
-        console.log(` Seeded ${userCancellationStats.length} user cancellation stats`);
+        console.log(`✓ Seeded ${userCancellationStats.length} user cancellation stats`);
 
         // Summary stats
         const statusCounts = bookings.reduce((acc, b) => {
@@ -394,20 +515,43 @@ module.exports = {
             return acc;
         }, {});
 
-        console.log('\n Booking Status Distribution:');
-        console.log('   (pending | completed | cancelled | failed | expired | cancellation_requested)');
+        const refundStatusCounts = payments.reduce((acc, p) => {
+            acc[p.refund_status] = (acc[p.refund_status] || 0) + 1;
+            return acc;
+        }, {});
+
+        console.log('\n📊 Booking Status Distribution:');
+        console.log('   (pending | completed | cancelled | failed | expired | cancellation_requested | refunded)');
         Object.entries(statusCounts).forEach(([status, count]) => {
             console.log(`   ${status}: ${count} (${((count / bookings.length) * 100).toFixed(1)}%)`);
         });
 
-        console.log('\n Payment Status Distribution:');
-        console.log('   (pending | completed | failed | expired | cancelled | refunded)');
+        console.log('\n💳 Payment Status Distribution:');
+        console.log('   (pending | completed | failed | expired | cancelled)');
         Object.entries(paymentStatusCounts).forEach(([status, count]) => {
             console.log(`   ${status}: ${count} (${((count / payments.length) * 100).toFixed(1)}%)`);
         });
 
+        console.log('\n💰 Refund Status Distribution:');
+        console.log('   (none | pending | completed)');
+        Object.entries(refundStatusCounts).forEach(([status, count]) => {
+            console.log(`   ${status}: ${count} (${((count / payments.length) * 100).toFixed(1)}%)`);
+        });
+
         const flaggedUsers = userCancellationStats.filter(s => s.is_flagged).length;
-        console.log(`\nFlagged users (>30% cancellation rate): ${flaggedUsers}/${userCancellationStats.length}`);
+        console.log(`\n⚠️  Flagged users (>30% cancellation rate): ${flaggedUsers}/${userCancellationStats.length}`);
+
+        // Data quality checks
+        console.log('\n✅ Data Quality Checks:');
+        const paymentsWithQR = payments.filter(p => p.qr_string !== null).length;
+        const paymentsWithAPV = payments.filter(p => p.apv !== null).length;
+        const paymentsWithPaidAt = payments.filter(p => p.paid_at !== null).length;
+        const paymentsWithRefund = payments.filter(p => p.refund_amount > 0).length;
+        
+        console.log(`   Payments with QR data: ${paymentsWithQR}`);
+        console.log(`   Payments with APV (completed): ${paymentsWithAPV}`);
+        console.log(`   Payments with paid_at: ${paymentsWithPaidAt}`);
+        console.log(`   Payments with refund_amount > 0: ${paymentsWithRefund}`);
     },
 
     async down(queryInterface, Sequelize) {

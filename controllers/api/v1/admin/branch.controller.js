@@ -1,4 +1,4 @@
-const {users, branches,rooms, sequelize} = require('../../../../models');
+const {users, branches,rooms, sequelize, photos} = require('../../../../models');
 const {Op} = require("sequelize");
 const {getLatLong} = require("../../../../utils/map.util");
 
@@ -91,9 +91,45 @@ async function createBranch(branchData){
 
 async function getBranches() {
     try {
-        return await branches.findAll({
+        const allBranches = await branches.findAll({
             order: [['createdAt', 'DESC']]
         });
+
+        if (!allBranches || allBranches.length === 0) {
+            return [];
+        }
+
+        const branchIds = allBranches.map(branch => branch.id);
+
+        // Fetch photos for all branches
+        const branchPhotosMap = {};
+        if (branchIds.length > 0) {
+            const branchPhotos = await photos.findAll({
+                where: {
+                    entity_type: 'branches',
+                    entity_id: branchIds
+                },
+                attributes: ['id', 'public_url', 'display_order', 'entity_id'],
+                order: [['display_order', 'ASC'], ['createdAt', 'ASC']]
+            });
+
+            branchPhotos.forEach(photo => {
+                if (!branchPhotosMap[photo.entity_id]) {
+                    branchPhotosMap[photo.entity_id] = [];
+                }
+                branchPhotosMap[photo.entity_id].push({
+                    id: photo.id,
+                    public_url: photo.public_url,
+                    display_order: photo.display_order
+                });
+            });
+        }
+
+        // Add photos to branches
+        return allBranches.map(branch => ({
+            ...branch.toJSON(),
+            branchPhotos: branchPhotosMap[branch.id] || []
+        }));
     } catch (error) {
         console.error('Error fetching branches:', error);
         throw error;
