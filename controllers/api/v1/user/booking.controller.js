@@ -367,7 +367,7 @@ console.log('  End stored (UTC):', booking.end_time.toISOString());
 
             // Update booking status to cancelled
             await booking.update({
-                status: 'cancelled',
+                status: 'refunded',
                 cancelled_at: new Date()
             }, { transaction });
 

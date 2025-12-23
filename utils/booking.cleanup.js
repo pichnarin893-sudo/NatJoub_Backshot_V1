@@ -7,7 +7,7 @@ const { Op } = require('sequelize');
  * This prevents rooms from being blocked by unpaid/unconfirmed bookings
  */
 async function cancelExpiredPendingBookings() {
-    const fiveMinutesAgo = new Date(Date.now() - 10 * 1000);
+    const fiveMinutesAgo = new Date(Date.now()  - 5 * 60 * 1000);
 
     //Date.now() - 10 * 1000 for demo 30s
     try {
